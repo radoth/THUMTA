@@ -9,10 +9,13 @@ import queue
 import threading
 import torch
 
+import wandb
 import torch.distributed as dist
 import torch.utils.tensorboard as tensorboard
+import os
 
 _SUMMARY_WRITER = None
+_SUMMARY_WRITER_WANDB = None
 _QUEUE = None
 _THREAD = None
 
@@ -34,6 +37,8 @@ class SummaryWorker(threading.Thread):
     def write_summary(self, name, **kwargs):
         if name == "scalar":
             _SUMMARY_WRITER.add_scalar(**kwargs)
+            _SUMMARY_WRITER_WANDB.log(
+                {kwargs['tag']: kwargs['scalar_value']}, step=kwargs['global_step'])
         elif name == "histogram":
             _SUMMARY_WRITER.add_histogram(**kwargs)
 
@@ -43,13 +48,20 @@ class SummaryWorker(threading.Thread):
         self.join()
 
 
-def init(log_dir, enable=True):
+def init(log_dir, params, enable=True):
     global _SUMMARY_WRITER
+    global _SUMMARY_WRITER_WANDB
     global _QUEUE
     global _THREAD
 
     if enable and dist.get_rank() == 0:
-        _SUMMARY_WRITER = tensorboard.SummaryWriter(log_dir)
+        project_name = "MachineTranslation"
+        run_name = "test30"
+
+        _SUMMARY_WRITER_WANDB = wandb.init(
+            project=project_name, config=params, name=run_name, reinit=True)
+        _SUMMARY_WRITER = tensorboard.SummaryWriter(
+            os.path.join(log_dir, project_name, run_name))
         _QUEUE = queue.Queue()
         thread = SummaryWorker(daemon=True)
         thread.start()
@@ -82,3 +94,4 @@ def close():
     if _SUMMARY_WRITER is not None:
         _THREAD.stop()
         _SUMMARY_WRITER.close()
+        _SUMMARY_WRITER_WANDB.finish(1)

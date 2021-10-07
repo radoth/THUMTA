@@ -385,7 +385,7 @@ def main(args):
     model.train()
 
     # Init tensorboard
-    summary.init(params.output, params.save_summary)
+    summary.init(params.output, params, params.save_summary)
 
     schedule = get_learning_rate_schedule(params)
     clipper = get_clipper(params)
